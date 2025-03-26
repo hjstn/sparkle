@@ -1,5 +1,7 @@
-from sparkle.sparkle import SparklePlan
 import pandas as pd
+
+from sparkle.plan import SparklePlan
+from sparkle.plan_itemqty import SparklePlanItemQty
 
 items = {
     "minecraft:iron_sword": {
@@ -11,14 +13,10 @@ items = {
         "demand": []
     },
     "minecraft:stick": {
-        "supply": [(-1, 1000)],
+        "supply": [(-1, 1000), (4, 1)],
         "demand": []
     },
-    "minecraft:plank_a": {
-        "supply": [(-1, 100), (2, 1)],
-        "demand": []
-    },
-    "minecraft:plank_b": {
+    "minecraft:plank": {
         "supply": [(-1, 100), (2, 1)],
         "demand": []
     }
@@ -37,28 +35,31 @@ recipes = {
     "minecraft:stick": [
         {
             "input": {
-                "minecraft:plank_a": 2
-            },
-            "quantity": 4
-        },
-        {
-            "input": {
-                "minecraft:plank_b": 2
+                "minecraft:plank": 2
             },
             "quantity": 4
         }
     ]
 }
 
-sparkle_plan = SparklePlan(items, recipes, "minecraft:iron_sword", 13)
+plan = SparklePlan(
+    items,
+    [{
+        "produced_item": SparklePlanItemQty(produced_item, recipe[0]["quantity"]),
+        "consumed_items": [SparklePlanItemQty(item, qty) for item, qty in recipe[0]["input"].items()]
+    }
+    for produced_item, recipe in recipes.items()],
+    SparklePlanItemQty("minecraft:iron_sword", 13))
 
-min_cost, buy_plan, craft_plan, leftovers = sparkle_plan.solve()
+def vis(plan):
+    min_cost, buy_plan, craft_plan, leftovers = plan.solve()
 
-# Build dataframe for display
-df = pd.DataFrame(
-    [{"step": "buy", "detail": f"{item}@{i}", "qty": qty} for item, i, qty in buy_plan] +
-    [{"step": "craft", "detail": f"{item}#{r_id}", "qty": qty} for item, r_id, qty in craft_plan] +
-    [{"step": "leftover", "detail": item, "qty": qty} for item, qty in leftovers.items()]
-)
+    # Build dataframe for display
+    return pd.DataFrame(
+        [{"step": "buy", "detail": f"{item}@{i}", "qty": qty} for item, i, qty in buy_plan] +
+        [{"step": "craft", "detail": f"{r.produced_item.item}#{r.id}", "qty": qty} for r, qty in craft_plan] +
+        [{"step": "leftover", "detail": item, "qty": qty} for item, qty in leftovers.items()] +
+        [{"step": "total", "detail": "cost", "qty": min_cost}]
+    )
 
-print(df)
+print(vis(plan))
