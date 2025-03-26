@@ -31,11 +31,3 @@ class SparklePlanRecipe:
         crafts_var = self.model.NewIntVar(0, self.inf, f"recipe_crafted_{self.id}")
 
         return crafts_var
-
-'''
-        consumed_expr = [
-            craft_vars[(prod_item, r_id)] * self.recipes[prod_item][r_id]["input"][item]
-            for prod_item, r_id in self.recipes_consumed.get(item, [])
-        ]
-
-'''

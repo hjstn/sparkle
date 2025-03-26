@@ -25,7 +25,7 @@ class SparklePlanItem:
         self.produced = self._setup_produced()
         self.consumed = self._setup_consumed()
 
-        self._setup_balance()
+        self._setup_balance(0)
     
     def buy_plan(self, solver: cp_model.CpSolver):
         return [
@@ -76,7 +76,7 @@ class SparklePlanItem:
 
         return consumed_var
     
-    def _setup_balance(self, min_additional: int =0):
+    def _setup_balance(self, min_additional: int = 0):
         self.model.Add(self.bought + self.produced - self.consumed >= min_additional)
     
     def _parse_max_qty(self, qty: int):
