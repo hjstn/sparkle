@@ -1,55 +1,43 @@
 import pandas as pd
 
 from sparkle.plan.plan import SparklePlan
-from sparkle.itemqty import SparkleItemQty
+from sparkle.types.item import SparkleItem
+from sparkle.types.itemqty import SparkleItemQty
+from sparkle.types.market_trade import SparkleMarketTrade, SparkleMarketTradeType
+from sparkle.types.recipe import SparkleRecipe
 
-items = ["minecraft:iron_sword", "minecraft:iron_ingot", "minecraft:stick", "minecraft:plank"]
-
-recipes = [
-    {
-        "produced_item": { "item": "minecraft:iron_sword", "qty": 1 },
-        "consumed_items": [
-            { "item": "minecraft:iron_ingot", "qty": 2 },
-            { "item": "minecraft:stick", "qty": 1 }
-        ]
-    },
-    {
-        "produced_item": { "item": "minecraft:stick", "qty": 4 },
-        "consumed_items": [
-            { "item": "minecraft:plank", "qty": 2 }
-        ]
-    }
+items = [
+    SparkleItem("minecraft:iron_sword"),
+    SparkleItem("minecraft:iron_ingot"),
+    SparkleItem("minecraft:stick"),
+    SparkleItem("minecraft:plank")
 ]
 
-market = {
-    "minecraft:iron_ingot": {
-        "product_id": "minecraft:iron_ingot",
-        "sell_summary": [
-            { "amount": -1, "pricePerUnit": 10, "orders": 1 }
-        ],
-        "buy_summary": [],
-    },
-    "minecraft:plank": {
-        "product_id": "minecraft:plank",
-        "sell_summary": [
-            { "amount": -1, "pricePerUnit": 1, "orders": 1 }
-        ],
-        "buy_summary": [],
-    },
-}
+recipes = [
+    SparkleRecipe("r_0", SparkleItemQty("minecraft:iron_sword", 1), [
+        SparkleItemQty("minecraft:iron_ingot", 2),
+        SparkleItemQty("minecraft:stick", 1)
+    ]),
+    SparkleRecipe("r_1", SparkleItemQty("minecraft:stick", 4), [
+        SparkleItemQty("minecraft:plank", 2)
+    ])
+]
 
-plan = SparklePlan(
-    items, recipes, market,
-    SparkleItemQty("minecraft:iron_sword", 13))
+market = [
+    SparkleMarketTrade(SparkleMarketTradeType.SELL, "t_0", "minecraft:iron_ingot", -1, 10),
+    SparkleMarketTrade(SparkleMarketTradeType.SELL, "t_1", "minecraft:plank", -1, 1),
+]
+
+plan = SparklePlan(items, recipes, market, SparkleItemQty("minecraft:iron_sword", 13))
 
 def vis(plan: SparklePlan):
-    min_cost, buy_plan, craft_plan, leftovers = plan.solve()
+    min_cost, trade_plan, craft_plan, leftovers = plan.solve()
 
     # Build dataframe for display
     return pd.DataFrame(
-        [{"step": "buy", "detail": f"{b.item_id}@{b.buy_id}", "qty": b.qty} for b in buy_plan] +
-        [{"step": "craft", "detail": f"{recipes[r.recipe_id]['produced_item']['item']}#{r.recipe_id}", "qty": r.qty} for r in craft_plan] +
-        [{"step": "leftover", "detail": item.item, "qty": item.qty} for item in leftovers] +
+        [{"step": "buy", "detail": f"{t.trade_id}", "qty": t.trades} for t in trade_plan] +
+        [{"step": "craft", "detail": f"{r.recipe_id}", "qty": r.crafts} for r in craft_plan] +
+        [{"step": "leftover", "detail": item.item_id, "qty": item.qty} for item in leftovers] +
         [{"step": "total", "detail": "cost", "qty": min_cost}]
     )
 

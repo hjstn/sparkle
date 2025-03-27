@@ -2,20 +2,24 @@ from collections import defaultdict
 import itertools
 from ortools.sat.python import cp_model
 
-from sparkle.plan.buy_plan import SparklePlanBuyPlan
-from sparkle.plan.craft_plan import SparklePlanCraftPlan
-from sparkle.plan.item import SparklePlanItem
-from sparkle.itemqty import SparkleItemQty
-from sparkle.plan.recipe import SparklePlanRecipe
+from sparkle.types.item import SparkleItem
+from sparkle.types.recipe import SparkleRecipe
+from sparkle.types.itemqty import SparkleItemQty
+from sparkle.types.market_trade import SparkleMarketTrade, SparkleMarketTradeType
+from sparkle.plan.types.item import SparklePlanItem
+from sparkle.plan.types.recipe import SparklePlanRecipe
+from sparkle.plan.types.trade_plan import SparklePlanTradePlan
+from sparkle.plan.types.craft_plan import SparklePlanCraftPlan
+from sparkle.plan.types.market_trade import SparklePlanMarketTrade
 
 # TODO: Reverse topological pruning to remove unused items
 # TODO: Separation of Market from Item
 
 class SparklePlan:
-    def __init__(self, items: list[str], recipes: list, market: dict, target_item: SparkleItemQty, inf=int(1e10)):
+    def __init__(self, items: list[SparkleItem], recipes: list[SparkleRecipe], market: list[SparkleMarketTrade], target: SparkleItemQty, inf=int(1e10)):
         self.model = cp_model.CpModel()
 
-        self.target_item = target_item
+        self.target = target
         self.inf = inf
 
         self.recipes = self._setup_recipes(recipes)
@@ -23,13 +27,13 @@ class SparklePlan:
 
         self.market_buys, self.market_sells = self._setup_market(market)
 
-        self.items = self._setup_items(items, target_item)
+        self.items = self._setup_items(items, target)
 
         self.total_cost = self._setup_total_cost()
         self.total_buys = self._setup_total_buys()
         self.total_crafts = self._setup_total_crafts()
 
-    def solve(self) -> tuple[int, list[SparklePlanBuyPlan], list[SparklePlanCraftPlan], list[SparkleItemQty]]:
+    def solve(self) -> tuple[int, list[SparklePlanTradePlan], list[SparklePlanCraftPlan], list[SparkleItemQty]]:
         self.model.Minimize(self.total_cost)
 
         solver = cp_model.CpSolver()
@@ -38,8 +42,8 @@ class SparklePlan:
         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             min_cost_val = solver.Value(self.total_cost)
 
-            buy_plans = list(itertools.chain.from_iterable(
-                item_var.buy_plan(solver) for item_var in self.items.values()
+            trade_plan = list(itertools.chain.from_iterable(
+                item_var.trade_plan(solver) for item_var in self.items.values()
             ))
 
             craft_plans = list(itertools.chain.from_iterable(
@@ -48,23 +52,26 @@ class SparklePlan:
 
             leftovers = [
                 SparkleItemQty(item, solver.Value(item_var.leftovers))
-                for item, item_var in self.items.items()
-                if solver.Value(item_var.leftovers) > 0
+                for item, item_var in self.items.items() if solver.Value(item_var.leftovers) > 0
             ]
 
-            return min_cost_val, buy_plans, craft_plans, leftovers
+            return min_cost_val, trade_plan, craft_plans, leftovers
         else:
-            return None, None, None, None
+            # Add more informative error handling
+            status_name = {
+                cp_model.UNKNOWN: "UNKNOWN",
+                cp_model.MODEL_INVALID: "MODEL_INVALID",
+                cp_model.INFEASIBLE: "INFEASIBLE",
+                cp_model.OPTIMAL: "OPTIMAL",
+                cp_model.FEASIBLE: "FEASIBLE",
+            }.get(status, f"UNKNOWN_STATUS_{status}")
+            
+            raise RuntimeError(f"Solver failed with status: {status_name}")
     
-    def _setup_recipes(self, recipes: list):
+    def _setup_recipes(self, recipes: list[SparkleRecipe]):
         recipes = {
-            recipe_id: SparklePlanRecipe(
-                self.model, recipe_id, 
-                SparkleItemQty(**recipe["produced_item"]),
-                [SparkleItemQty(**c) for c in recipe["consumed_items"]],
-                self.inf
-            )
-            for recipe_id, recipe in enumerate(recipes)
+            r.recipe_id: SparklePlanRecipe(self.model, self.inf, r)
+            for r in recipes
         }
 
         return recipes
@@ -74,41 +81,36 @@ class SparklePlan:
         recipes_consuming = defaultdict(list)
         
         for recipe in self.recipes.values():
-            recipes_producing[recipe.produced_item.item].append(recipe)
+            recipes_producing[recipe.data.produced_item.item_id].append(recipe)
 
-            for consumed_item in recipe.consumed_items:
-                recipes_consuming[consumed_item.item].append(recipe)
+            for consumed_item in recipe.data.consumed_items:
+                recipes_consuming[consumed_item.item_id].append(recipe)
         
         return recipes_producing, recipes_consuming
 
 
-    def _setup_market(self, market: dict):
-        market_buys = {
-            item_id: [(b["amount"], b["pricePerUnit"]) for b in market[item_id]["buy_summary"]]
-            for item_id in market
-        }
+    def _setup_market(self, market: list[SparkleMarketTrade]):
+        market_buys = defaultdict(list)
+        market_sells = defaultdict(list)
 
-        market_sells = {
-            item_id: [(s["amount"], s["pricePerUnit"]) for s in market[item_id]["sell_summary"]]
-            for item_id in market
-        }
+        for trade in market:
+            plan_trade = SparklePlanMarketTrade(self.model, self.inf, trade)
+
+            if trade.type == SparkleMarketTradeType.BUY:
+                market_buys[trade.item_id].append(plan_trade)
+            else:
+                market_sells[trade.item_id].append(plan_trade)
 
         return market_buys, market_sells
 
-    def _setup_items(self, items: list, target_item: SparkleItemQty):
+    def _setup_items(self, items: list[SparkleItem], target: SparkleItemQty):
         return {
-            item_id: self._setup_item(item_id,
-                                      target_item.qty if item_id == target_item.item else 0)
-            for item_id in items
+            i.item_id: SparklePlanItem(self.model, self.inf,
+                                       i, target.qty if i.item_id == target.item_id else 0,
+                                       self.market_buys.get(i.item_id, []), self.market_sells.get(i.item_id, []),
+                                       self.recipes_producing.get(i.item_id, []), self.recipes_consuming.get(i.item_id, []))
+            for i in items
         }
-    
-    def _setup_item(self, item_id: str, additional_qty: int):
-        return SparklePlanItem(
-            self.model, item_id, additional_qty,
-            self.market_buys.get(item_id, []), self.market_sells.get(item_id, []),
-            self.recipes_producing.get(item_id, []), self.recipes_consuming.get(item_id, []),
-            self.inf
-        )
 
     def _setup_total_cost(self):
         cost_expr = [item_var.cost for item_var in self.items.values()]

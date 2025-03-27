@@ -2,5 +2,5 @@ from dataclasses import dataclass
 
 @dataclass
 class SparkleItemQty:
-    item: str
+    item_id: str
     qty: int
