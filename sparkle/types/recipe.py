@@ -12,3 +12,6 @@ class SparkleRecipe:
 
     def __post_init__(self):
         self.consumed_qty = {c.item_id: c.qty for c in self.consumed_items}
+
+    def __repr__(self):
+        return f"SparkleRecipe({self.recipe_id}, {self.produced_item}, {self.consumed_items})"

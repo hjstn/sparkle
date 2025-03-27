@@ -1,6 +1,7 @@
 import pandas as pd
 
 from sparkle.plan.plan import SparklePlan
+from sparkle.planner import SparklePlanner
 from sparkle.types.item import SparkleItem
 from sparkle.types.itemqty import SparkleItemQty
 from sparkle.types.market_trade import SparkleMarketTrade, SparkleMarketTradeType
@@ -28,7 +29,11 @@ market = [
     SparkleMarketTrade(SparkleMarketTradeType.SELL, "t_1", "minecraft:plank", -1, 1),
 ]
 
-plan = SparklePlan(items, recipes, market, SparkleItemQty("minecraft:iron_sword", 13))
+planner = SparklePlanner(items, recipes, market)
+
+plan = planner.plan(SparkleItemQty("minecraft:iron_sword", 13))
+
+# plan = SparklePlan(items, recipes, market, SparkleItemQty("minecraft:iron_sword", 13))
 
 def vis(plan: SparklePlan):
     min_cost, trade_plan, craft_plan, leftovers = plan.solve()

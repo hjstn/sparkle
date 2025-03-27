@@ -1,14 +1,13 @@
 from ortools.sat.python import cp_model
 
+from sparkle.plan.types.base import SparklePlanBase
 from sparkle.types.recipe import SparkleRecipe
 from sparkle.plan.types.craft_plan import SparklePlanCraftPlan
 
 
-class SparklePlanRecipe:
-    def __init__(self, model: cp_model.CpModel, inf: int,
-                 data: SparkleRecipe):
-        self.model = model
-        self.inf = inf
+class SparklePlanRecipe(SparklePlanBase):
+    def __init__(self, model: cp_model.CpModel, inf: int, data: SparkleRecipe):
+        super().__init__(model, inf)
 
         self.data = data
 
