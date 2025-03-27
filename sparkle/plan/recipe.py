@@ -1,11 +1,12 @@
 from ortools.sat.python import cp_model
 
-from sparkle.plan_itemqty import SparklePlanItemQty
+from sparkle.plan.craft_plan import SparklePlanCraftPlan
+from sparkle.itemqty import SparkleItemQty
 
 class SparklePlanRecipe:
     def __init__(self, model: cp_model.CpModel, id: str,
-                 produced_item: SparklePlanItemQty,
-                 consumed_items: list[SparklePlanItemQty],
+                 produced_item: SparkleItemQty,
+                 consumed_items: list[SparkleItemQty],
                  inf: int):
         self.model = model
         self.id = id
@@ -21,11 +22,11 @@ class SparklePlanRecipe:
 
         self.crafts = self._setup_crafted()
     
-    def craft_plan(self, solver: cp_model.CpSolver):
+    def craft_plan(self, solver: cp_model.CpSolver) -> list[SparklePlanCraftPlan]:
         if solver.Value(self.crafts) == 0:
-            return None
-            
-        return (self.id, solver.Value(self.crafts))
+            return []
+
+        return [SparklePlanCraftPlan(self.id, solver.Value(self.crafts))]
 
     def _setup_crafted(self):
         crafts_var = self.model.NewIntVar(0, self.inf, f"recipe_crafted_{self.id}")

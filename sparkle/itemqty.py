@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
 @dataclass
-class SparklePlanItemQty:
+class SparkleItemQty:
     item: str
     qty: int

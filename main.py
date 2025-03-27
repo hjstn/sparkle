@@ -1,64 +1,55 @@
 import pandas as pd
 
-from sparkle.plan import SparklePlan
-from sparkle.plan_itemqty import SparklePlanItemQty
+from sparkle.plan.plan import SparklePlan
+from sparkle.itemqty import SparkleItemQty
 
-items = {
-    "minecraft:iron_sword": {
-        "supply": [],
-        "demand": []
+items = ["minecraft:iron_sword", "minecraft:iron_ingot", "minecraft:stick", "minecraft:plank"]
+
+recipes = [
+    {
+        "produced_item": { "item": "minecraft:iron_sword", "qty": 1 },
+        "consumed_items": [
+            { "item": "minecraft:iron_ingot", "qty": 2 },
+            { "item": "minecraft:stick", "qty": 1 }
+        ]
     },
+    {
+        "produced_item": { "item": "minecraft:stick", "qty": 4 },
+        "consumed_items": [
+            { "item": "minecraft:plank", "qty": 2 }
+        ]
+    }
+]
+
+market = {
     "minecraft:iron_ingot": {
-        "supply": [(-1, 10)],
-        "demand": []
-    },
-    "minecraft:stick": {
-        "supply": [(-1, 1000), (4, 1)],
-        "demand": []
+        "product_id": "minecraft:iron_ingot",
+        "sell_summary": [
+            { "amount": -1, "pricePerUnit": 10, "orders": 1 }
+        ],
+        "buy_summary": [],
     },
     "minecraft:plank": {
-        "supply": [(-1, 100), (2, 1)],
-        "demand": []
-    }
-}
-
-recipes = {
-    "minecraft:iron_sword": [
-        {
-            "input": {
-                "minecraft:iron_ingot": 2,
-                "minecraft:stick": 1
-            },
-            "quantity": 1
-        }
-    ],
-    "minecraft:stick": [
-        {
-            "input": {
-                "minecraft:plank": 2
-            },
-            "quantity": 4
-        }
-    ]
+        "product_id": "minecraft:plank",
+        "sell_summary": [
+            { "amount": -1, "pricePerUnit": 1, "orders": 1 }
+        ],
+        "buy_summary": [],
+    },
 }
 
 plan = SparklePlan(
-    items,
-    [{
-        "produced_item": SparklePlanItemQty(produced_item, recipe[0]["quantity"]),
-        "consumed_items": [SparklePlanItemQty(item, qty) for item, qty in recipe[0]["input"].items()]
-    }
-    for produced_item, recipe in recipes.items()],
-    SparklePlanItemQty("minecraft:iron_sword", 13))
+    items, recipes, market,
+    SparkleItemQty("minecraft:iron_sword", 13))
 
-def vis(plan):
+def vis(plan: SparklePlan):
     min_cost, buy_plan, craft_plan, leftovers = plan.solve()
 
     # Build dataframe for display
     return pd.DataFrame(
-        [{"step": "buy", "detail": f"{item}@{i}", "qty": qty} for item, i, qty in buy_plan] +
-        [{"step": "craft", "detail": f"{r.produced_item.item}#{r.id}", "qty": qty} for r, qty in craft_plan] +
-        [{"step": "leftover", "detail": item, "qty": qty} for item, qty in leftovers.items()] +
+        [{"step": "buy", "detail": f"{b.item_id}@{b.buy_id}", "qty": b.qty} for b in buy_plan] +
+        [{"step": "craft", "detail": f"{recipes[r.recipe_id]['produced_item']['item']}#{r.recipe_id}", "qty": r.qty} for r in craft_plan] +
+        [{"step": "leftover", "detail": item.item, "qty": item.qty} for item in leftovers] +
         [{"step": "total", "detail": "cost", "qty": min_cost}]
     )
 
